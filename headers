@@ -1,0 +1,18 @@
+HTTP/2 400 
+cache-control: no-cache
+pragma: no-cache
+content-length: 19
+content-type: text/plain; charset=utf-8
+expires: -1
+server: Microsoft-IIS/10.0
+x-aspnet-version: 4.0.30319
+x-powered-by: ASP.NET
+date: Tue, 17 May 2022 12:44:16 GMT
+via: 1.1 google
+alt-svc: h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
+set-cookie: visid_incap_2758065=R0DiYcNTTsyJMCizlRbmdKCYg2IAAAAAQUIPAAAAAAD7LUCGL4cVF1vJBNgcS9vH; expires=Tue, 16 May 2023 22:15:38 GMT; HttpOnly; path=/; Domain=.optimove.net; Secure; SameSite=None
+set-cookie: incap_ses_1176_2758065=zBzKGYRhEDmXPeV2D/5REKCYg2IAAAAA3M7XJKhBHchuuR6vyrEkkw==; path=/; Domain=.optimove.net; Secure; SameSite=None
+strict-transport-security: max-age=31536000; includeSubDomains
+x-cdn: Imperva
+x-iinfo: 6-9974202-9974205 NNNY CT(2 6 0) RT(1652791456698 17) q(0 0 0 -1) r(0 0) U5
+
