@@ -1,0 +1,126 @@
+projectid <- "bi-playground-269209"
+
+bq_auth(path= "/opt/syek/key.json")
+
+sql <- ("select a.*, home, draw, away from
+(select *
+, case when side = 'H' then goals_side else null end as home_score
+, case when side = 'A' then goals_side else null end as away_score
+from
+(select *, ROW_NUMBER() OVER(PARTITION BY fixture_id, side ORDER BY fixture_id, time_elapsed, time_extra) AS goals_side
+from
+(select a.*, b.fixture_date, goals_home, goals_away
+, case when team_id = teams_home_id then 'H' else 'A' end as side
+, ROW_NUMBER() OVER(PARTITION BY a.fixture_id ORDER BY a.fixture_id, time_elapsed, time_extra) AS max_date 
+from
+(SELECT * FROM `bi-playground-269209.soccer_test.events_daily` where type = 'Goal') a
+left join (select fixture_id, fixture_date, teams_away_id, teams_home_id, goals_home, goals_away from `bi-playground-269209.soccer_test.game_schedule_daily` where date(cast(fixture_date as timestamp)) < current_date()-1) b
+on a.fixture_id = b.fixture_id))
+where max_date = 1) a
+left join `bi-playground-269209.soccer_test.odds_table` b
+on a.fixture_id = b.fixture_id
+where home is not null")
+
+results_df1 <- bq_table_download(bq_project_query(projectid,sql))
+
+
+# test22 <- results_df1 %>% filter(side=="H" & time_elapsed>15 & time_elapsed<=20) %>% 
+#   mutate(ft_score=(goals_home+goals_away),home_r=round(away,1),over15=if_else((goals_home+goals_away)>1,"Y","N")) %>% 
+#   select(fixture_id,ft_score,time_elapsed,home_r,over15) %>% group_by(over15,home_r) %>% dplyr::summarise(xxx=n())
+# 
+# test33 <- results_df1 %>% filter(side=="H" & time_elapsed>15 & time_elapsed<=20) %>% 
+#   mutate(ft_score=(goals_home+goals_away),home_r=round(away,1),over15=if_else((goals_home+goals_away)>1,"Y","N")) %>% 
+#   select(fixture_id,ft_score,time_elapsed,home_r) %>% group_by(home_r) %>% dplyr::summarise(yyy=n())
+# 
+# test44 <- left_join(test22,test33,by=c("home_r"="home_r")) %>% mutate(ratio=xxx/yyy) %>% filter(over15=="Y") %>% mutate(prc_tot=yyy/sum(yyy))
+# 
+# test44$prc_tot_cum <- cumsum(test44$prc_tot)
+# test44$xxx_cum <- cumsum(test44$xxx)
+# test44$yyy_cum <- cumsum(test44$yyy)
+# test44$ratio_cum <- test44$xxx_cum/test44$yyy_cum
+
+
+#automat
+
+#wylicza prawdopodobienstwo over1.5 w zaleznosci od tego w ktorej min padl gol
+
+#df1 <- data.frame(x = seq(0,40,5), y = seq(5, 45, 5), ID = letters[1:9])
+
+x <- seq(0,40,5)
+
+y <- c("H","A")
+
+fftest <- tibble()
+
+for (i in x) {
+  
+  for (j in y) {
+
+  
+  test22 <- results_df1 %>% filter(side==j & time_elapsed>i & time_elapsed<=(i+5)) %>% 
+    mutate(ft_score=(goals_home+goals_away),home_r=round(home,1),over15=if_else((goals_home+goals_away)>1,"Y","N"),minute_range=paste0(i,"_",i+5),side_score=j,stop=i+5) %>%
+    select(fixture_id,ft_score,time_elapsed,home_r,over15,minute_range,side_score,stop) %>% dplyr::group_by(side_score,minute_range,over15,home_r,stop) %>% dplyr::summarise(xxx=n()) %>% ungroup()
+
+  test33 <- results_df1 %>% filter(side==j & time_elapsed>i & time_elapsed<=(i+5)) %>%
+    mutate(ft_score=(goals_home+goals_away),home_r=round(home,1),over15=if_else((goals_home+goals_away)>1,"Y","N"),minute_range=paste0(i,"_",i+5),side_score=j,stop=i+5) %>%
+    select(fixture_id,ft_score,time_elapsed,home_r,minute_range,side_score,stop) %>% group_by(side_score,minute_range,home_r,stop) %>% dplyr::summarise(yyy=n()) %>% ungroup()
+
+  test44 <- left_join(test22,test33,by=c("home_r"="home_r","minute_range"="minute_range","side_score"="side_score","stop"="stop")) %>% mutate(ratio=xxx/yyy) %>% filter(over15=="Y") %>% mutate(prc_tot=yyy/sum(yyy))
+
+  test44$prc_tot_cum <- cumsum(test44$prc_tot)
+  test44$xxx_cum <- cumsum(test44$xxx)
+  test44$yyy_cum <- cumsum(test44$yyy)
+  test44$ratio_cum <- test44$xxx_cum/test44$yyy_cum
+  test44$odds <- "H"
+
+  fftest <- dplyr::bind_rows(fftest,test44)
+  
+  }
+  
+}
+
+
+for (i in x) {
+
+  for (j in y) {
+
+
+    test22 <- results_df1 %>% filter(side==j & time_elapsed>i & time_elapsed<=(i+5)) %>% 
+      mutate(ft_score=(goals_home+goals_away),home_r=round(away,1),over15=if_else((goals_home+goals_away)>1,"Y","N"),minute_range=paste0(i,"_",i+5),side_score=j,stop=i+5) %>%
+      select(fixture_id,ft_score,time_elapsed,home_r,over15,minute_range,side_score,stop) %>% dplyr::group_by(side_score,minute_range,over15,home_r,stop) %>% dplyr::summarise(xxx=n()) %>% ungroup()
+    
+    test33 <- results_df1 %>% filter(side==j & time_elapsed>i & time_elapsed<=(i+5)) %>%
+      mutate(ft_score=(goals_home+goals_away),home_r=round(away,1),over15=if_else((goals_home+goals_away)>1,"Y","N"),minute_range=paste0(i,"_",i+5),side_score=j,stop=i+5) %>%
+      select(fixture_id,ft_score,time_elapsed,home_r,minute_range,side_score,stop) %>% group_by(side_score,minute_range,home_r,stop) %>% dplyr::summarise(yyy=n()) %>% ungroup()
+    
+    test44 <- left_join(test22,test33,by=c("home_r"="home_r","minute_range"="minute_range","side_score"="side_score","stop"="stop")) %>% mutate(ratio=xxx/yyy) %>% filter(over15=="Y") %>% mutate(prc_tot=yyy/sum(yyy))
+    
+    
+    test44$prc_tot_cum <- cumsum(test44$prc_tot)
+    test44$xxx_cum <- cumsum(test44$xxx)
+    test44$yyy_cum <- cumsum(test44$yyy)
+    test44$ratio_cum <- test44$xxx_cum/test44$yyy_cum
+    test44$odds <- "A"
+
+    fftest <- dplyr::bind_rows(fftest,test44)
+
+  }
+
+}
+
+
+bigrquery::bq_auth(path= "/opt/syek/key.json")
+
+billing = "1108793-EMEA-Bee-Fee Limited"
+project = "bi-playground-269209"
+data_set = "soccer_test"
+
+con = dbConnect(
+  bigrquery::bigquery(),
+  project = project,
+  dataset = data_set,
+  billing = billing
+)
+
+dbWriteTable(con, "over15prob", fftest, overwrite=TRUE)
+
