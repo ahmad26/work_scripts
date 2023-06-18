@@ -1,0 +1,13 @@
+select fixture_id, league_id, fixture_date, league_country, teams_away_id	teams_home_id, league_season, league_name, teams_home_name, teams_away_name
+, fixture_venue_name, fixture_venue_city, league_round, fixture_status_long, fixture_status_short, fixture_status_elapsed, goals_home, goals_away, stats_fx,	odds,	events, Home,	Draw, Away from
+(select a.*
+, case when coverage_fixtures_statistics_fixtures is true then 'Y' else 'N' end as stats_fx
+, case when coverage_odds is true then 'Y' else 'N' end as odds
+, case when coverage_fixtures_events is true then 'Y' else 'N' end as events
+, Home,	Draw, Away  
+from `bi-playground-269209.soccer_test.game_schedule` a
+left join (select * from `bi-playground-269209.soccer_test.details_leagues` where current_ is TRUE) b
+on a.league_id = b.league_id
+left join `bi-playground-269209.soccer_test.odds_table` c
+on a.fixture_id = c.fixture_id)
+where stats_fx = 'Y' or odds = 'Y' or events = 'Y'
