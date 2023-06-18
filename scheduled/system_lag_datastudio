@@ -1,0 +1,52 @@
+select cast(cet_curr_time as datetime) as cet_curr_time
+, team_id
+, fixture_id
+, minute
+, status_short
+, league_country
+, league_name
+, team_name
+, goals
+, side
+, cast(ball_possession as int) as ball_possession
+, cast(blocked_shots as int) as blocked_shots
+, lag(cast(blocked_shots as int)) OVER (PARTITION BY fixture_id, team_id ORDER BY cet_curr_time ASC) AS blocked_shots_lag
+, cast(corner_kicks as int) as corner_kicks
+, lag(cast(corner_kicks as int)) OVER (PARTITION BY fixture_id, team_id ORDER BY cet_curr_time ASC) AS corner_kicks_lag
+, cast(shots_on_goal as int) as shots_on_goal
+, lag(cast(shots_on_goal as int)) OVER (PARTITION BY fixture_id, team_id ORDER BY cet_curr_time ASC) AS shots_on_goal_lag
+, cast(shots_off_goal as int) as shots_off_goal
+, lag(cast(shots_off_goal as int)) OVER (PARTITION BY fixture_id, team_id ORDER BY cet_curr_time ASC) AS shots_off_goal_lag
+, cast(shots_insidebox as int) as shots_insidebox
+, lag(cast(shots_insidebox as int)) OVER (PARTITION BY fixture_id, team_id ORDER BY cet_curr_time ASC) AS shots_insidebox_lag
+, cast(shots_outsidebox as int) as shots_outsidebox
+, lag(cast(shots_outsidebox as int)) OVER (PARTITION BY fixture_id, team_id ORDER BY cet_curr_time ASC) AS shots_outsidebox_lag
+, cast(passes_accurate as int) as passes_accurate
+, lag(cast(passes_accurate as int)) OVER (PARTITION BY fixture_id, team_id ORDER BY cet_curr_time ASC) AS passes_accurate_lag
+, cast(total_passes as int) as total_passes
+, lag(cast(total_passes as int)) OVER (PARTITION BY fixture_id, team_id ORDER BY cet_curr_time ASC) AS total_passes_lag
+, cast(fouls as int) as fouls
+, lag(cast(fouls as int)) OVER (PARTITION BY fixture_id, team_id ORDER BY cet_curr_time ASC) AS fouls_lag
+, cast(yellow_cards as int) as yellow_cards
+, lag(cast(yellow_cards as int)) OVER (PARTITION BY fixture_id, team_id ORDER BY cet_curr_time ASC) AS yellow_cards_lag
+, cast(red_cards as int) as red_cards
+, lag(cast(red_cards as int)) OVER (PARTITION BY fixture_id, team_id ORDER BY cet_curr_time ASC) AS red_cards_lag
+, cast(offsides as int) as offsides
+, lag(cast(offsides as int)) OVER (PARTITION BY fixture_id, team_id ORDER BY cet_curr_time ASC) AS offsides_lag
+, cast(goalkeeper_saves as int) as goalkeeper_saves
+, lag(cast(goalkeeper_saves as int)) OVER (PARTITION BY fixture_id, team_id ORDER BY cet_curr_time ASC) AS goalkeeper_saves_lag
+, ROW_NUMBER() OVER(PARTITION BY fixture_id, team_id ORDER BY cet_curr_time DESC) as refresh_cnt
+from
+(select a.*
+, b.status_short
+, case when a.team_id = b.home_team_id then goals_home else goals_away end as goals
+, case when a.team_id = b.home_team_id then b.home_team else b.away_team end as team_name
+, b.league_name
+, league_country
+, case when a.team_id = b.home_team_id then "H" else "A" end as side
+from `bi-playground-269209.soccer_test.system` a
+inner join `bi-playground-269209.soccer_test.info` b
+on a.fixture_id = b.fixture_id and a.minute=b.status_elapsed and a.cet_curr_time = b.cet_curr_time
+inner join `bi-playground-269209.soccer_test.live` c
+on b.fixture_id = c.fixture_id)
+order by fixture_id, team_id, cet_curr_time desc
