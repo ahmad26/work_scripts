@@ -1,0 +1,30 @@
+rsr2 <- rsr_df %>% select(fixture_id,res_streak,pts,sum_pts,game_place,FT_result)
+
+rsr2H <- rsr2 %>% filter(game_place=="H")
+
+oldNames <- colnames(rsr2H)
+
+newNames <- paste0("h_",oldNames)
+
+rsr2H <- rsr2H %>% rename_at(vars(oldNames), ~ newNames)
+
+
+rsr2A <- rsr2 %>% filter(game_place=="A")
+
+oldNames <- colnames(rsr2A)
+
+newNames <- paste0("a_",oldNames)
+
+rsr2A <- rsr2A %>% rename_at(vars(oldNames), ~ newNames)
+
+
+
+all_rsr <- inner_join(rsr2H,rsr2A,by=c("h_fixture_id"="a_fixture_id"))
+
+all_rsr <- all_rsr %>% mutate(pts_diff=(h_sum_pts-a_sum_pts))
+
+rsr3 <- all_rsr %>% dplyr::group_by(h_sum_pts,pts_diff,h_FT_result) %>% dplyr::summarise(by_pt_ft=n())
+
+rsr3a <- all_rsr %>% dplyr::group_by(h_sum_pts,pts_diff) %>% dplyr::summarise(by_pt=n())
+
+rsr3b <- left_join(rsr3,rsr3a,by=c("h_sum_pts"="h_sum_pts","pts_diff"="pts_diff")) %>% mutate(ratio=by_pt_ft/by_pt)
