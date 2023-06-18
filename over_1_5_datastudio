@@ -1,0 +1,24 @@
+select a.*, b.ratio_cum from
+(select a.*, home, draw, away, ceil(time_elapsed / 5)*5 as rnd from
+(select *
+, case when side = 'H' then goals_side else null end as home_score
+, case when side = 'A' then goals_side else null end as away_score
+from
+(select *, ROW_NUMBER() OVER(PARTITION BY fixture_id, side ORDER BY fixture_id, time_elapsed, time_extra) AS goals_side
+from
+(select a.*, b.fixture_date, goals_home, goals_away, fixture_status_elapsed, league_country, league_name
+, case when team_id = teams_home_id then 'H' else 'A' end as side
+, ROW_NUMBER() OVER(PARTITION BY a.fixture_id ORDER BY a.fixture_id, time_elapsed, time_extra) AS max_date 
+from
+(SELECT * FROM `bi-playground-269209.soccer_test.events` where type = 'Goal') a
+left join (select fixture_id, fixture_date, teams_away_id, teams_home_id, goals_home, goals_away, fixture_status_elapsed, league_country, league_name from `bi-playground-269209.soccer_test.game_schedule` where fixture_status_short in ('1H','HT','2H')) b
+on a.fixture_id = b.fixture_id))
+where max_date = 1) a
+left join `bi-playground-269209.soccer_test.odds_table` b
+on a.fixture_id = b.fixture_id
+where home is not null ) a
+
+left join (select * from `bi-playground-269209.soccer_test.over15prob` where odds = 'H') b
+on a.rnd = b.stop and round(a.home,1) = b.home_r and a.side = b.side_score
+
+where goals_home+goals_away = 1 and ratio_cum >= 0.89
