@@ -1,0 +1,71 @@
+library(dplyr)
+library(tidyr)
+library(bigrquery)
+
+library(tidyverse)
+#library(ROpenWeatherMap)
+
+
+
+
+library(tidygeocoder)
+
+projectid <- "bi-playground-269209"
+
+bq_auth(path= "/opt/syek/key.json")
+
+sql <- ("select a.* from
+(select distinct fixture_venue_id, fixture_venue_name, fixture_venue_city, league_country, teams_home_name from `bi-playground-269209.soccer_test.game_schedule`
+where fixture_venue_name is not null) a
+left join `bi-playground-269209.soccer_test.coordinates` b
+on a.fixture_venue_id = b.fixture_venue_id
+where b.fixture_venue_id is null")
+
+Sys.setenv(GOOGLEGEOCODE_API_KEY = "AIzaSyB_498uWa0Ku2KP7ud2SoAm4eDlbLkfZn4")
+
+
+
+venues <- bq_table_download(bq_project_query(projectid,sql))
+
+venues$fixture_venue_name <- iconv(venues$fixture_venue_name, from = 'UTF-8', to = 'ASCII//TRANSLIT')
+venues$fixture_venue_city <- iconv(venues$fixture_venue_city, from = 'UTF-8', to = 'ASCII//TRANSLIT')
+
+venues <- venues %>% mutate(addr=paste0(fixture_venue_name,", ",fixture_venue_city)) 
+
+venues <- venues %>% filter(!is.na(fixture_venue_id) | (!is.na(fixture_venue_city) | !is.na(fixture_venue_name)))
+
+#ven1 <- head(venues)
+
+lat_longs <- venues %>%
+  geocode(addr, method = 'google', lat = latitude , long = longitude)
+
+write.csv(lat_longs,"~/Kuba/soccer/stadiums_coord_daily.csv", row.names = FALSE)
+
+
+astr <- "Ábcdêãçoàúü"
+iconv(astr, from = 'UTF-8', to = 'ASCII//TRANSLIT')
+
+
+lat_longs <- lat_longs %>% filter(!is.na(latitude) & !is.na(fixture_venue_city))
+
+#get_current_weather('dddd35afb9d32f7f4eaae90244398fa7', coordinates = c("6.244338","-75.57355"))
+
+lat_longs1 <- lat_longs %>% filter(!is.na(fixture_venue_id) & is.na(latitude) & !is.na(fixture_venue_name)) %>% select(-longitude,-latitude) %>% geocode(fixture_venue_name, method = 'osm', lat = latitude , long = longitude)
+
+lat_longs2 <- lat_longs %>% filter(!is.na(fixture_venue_id) & is.na(latitude) & !is.na(fixture_venue_name)) %>% select(-longitude,-latitude) %>% geocode(addr, method = 'google', lat = latitude , long = longitude)
+
+library(owmr)
+
+owmr_settings("dddd35afb9d32f7f4eaae90244398fa7")
+Sys.setenv(OWM_API_KEY = "fdc8762aa9843f6fbfb788d2089cc998")
+
+
+(res <- get_current("London", units = "metric") %>%
+    owmr_as_tibble()) %>% names()
+
+res <- find_cities_by_geo_point(
+  lat = -33.045846,
+  lon = -71.6196749,
+  cnt = 1,
+  units = "metric"
+) %>% owmr_as_tibble()
