@@ -1,0 +1,19 @@
+select a.* from
+(select fixture_id, player_name, team_name, time_elapsed, detail, goals_cnt, games_cnt, striker_rank, prc_all_goals,
+case when detail = 'Red Card' then  'striker_out' else 'striker_in' end as action
+from `bi-playground-269209.soccer_test.strikers` a
+inner join `bi-playground-269209.soccer_test.events` b
+on a.player_id = b.player_id
+where detail like 'Substitution%' or detail = 'Red Card'
+
+
+union all
+
+select fixture_id, assist_name as player_name, team_name, time_elapsed, detail, goals_cnt, games_cnt, striker_rank, prc_all_goals, 'striker_out' as action
+from `bi-playground-269209.soccer_test.strikers` a
+inner join `bi-playground-269209.soccer_test.events` b
+on a.player_id = b.assist_id
+where detail like 'Substitution%') a
+inner join `bi-playground-269209.soccer_test.game_schedule` b
+on a.fixture_id = b.fixture_id
+order by b.fixture_id, time_elapsed
