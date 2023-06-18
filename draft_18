@@ -1,0 +1,48 @@
+library(dplyr)
+library(tidyr)
+library(bigrquery)
+library(tidyverse)
+library(tidygeocoder)
+
+
+projectid <- "bi-playground-269209"
+
+bq_auth(path= "/opt/syek/key.json")
+
+sql <- ("select distinct fixture_venue_id, fixture_venue_name, fixture_venue_city, league_country from `bi-playground-269209.soccer_test.game_schedule`")
+
+venues <- bq_table_download(bq_project_query(projectid,sql))
+
+venues <- venues %>% mutate(addr=paste0(fixture_venue_city,", ",league_country))
+
+ven1 <- head(venues)
+
+lat_longs <- venues %>% geocode(addr, method = 'osm', lat = latitude , long = longitude)
+
+lat_longs1 <- lat_longs %>% filter(is.na(latitude)) %>% select(-longitude,-latitude)
+
+lat_longs2 <- lat_longs1 %>% geocode(addr, method = 'osm', lat = latitude , long = longitude)
+
+bigrquery::bq_auth(path= "/opt/syek/key.json")
+
+billing = "1108793-EMEA-Bee-Fee Limited"
+project = "bi-playground-269209"
+data_set = "soccer_test"
+
+con = dbConnect(
+  bigrquery::bigquery(),
+  project = project,
+  dataset = data_set,
+  billing = billing
+)
+
+dbWriteTable(con, "coordinates", lat_longs)
+
+
+# 
+# select * from
+# (select * , concat(fixture_venue_city,', ',league_country) as addr from
+#   (select distinct fixture_venue_id, fixture_venue_name, fixture_venue_city, league_country from `bi-playground-269209.soccer_test.game_schedule`)) a
+# left join `bi-playground-269209.soccer_test.coordinates` b
+# on a.addr = b.addr
+# where b.addr is null
