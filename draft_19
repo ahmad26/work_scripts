@@ -1,0 +1,221 @@
+projectid <- "bi-playground-269209"
+
+bq_auth(path= "/opt/syek/key.json")
+
+sql <- ("select a.league_id, round(avg(score_fulltime_home+score_fulltime_away),2) as avg_goals_per_league, count(*) as goals_cnt_per_league
+  from `bi-playground-269209.soccer_test.game_schedule_daily` a
+  where date(cast(fixture_date as datetime)) >= current_date() -60 and fixture_status_short in ('FT','AET','PEN') and a.league_id not in (10, 667, 666)
+group by a.league_id")
+
+avg_goals_per_league <- bq_table_download(bq_project_query(projectid,sql)) 
+
+
+#trzeba policzyc srednia goli strzelonych per team per game
+
+
+
+
+#gole strzelone
+
+avg_goals_per_league <- rsr_df %>% 
+  group_by(league_id) %>% 
+  summarise(avg_scored = mean(score_fulltime_team, na.rm = TRUE), 
+            avg_lost = mean(score_fulltime_opponent, na.rm = TRUE),
+            sum_scored = sum(score_fulltime_team, na.rm = TRUE), 
+            sum_lost = sum(score_fulltime_opponent, na.rm = TRUE),
+            med_scored = median(score_fulltime_team, na.rm = TRUE), 
+            med_lost = median(score_fulltime_opponent, na.rm = TRUE),
+            max_scored = max(score_fulltime_team, na.rm = TRUE), 
+            max_lost = max(score_fulltime_opponent, na.rm = TRUE),
+            gamest_cnt = n())
+
+
+matches_df_test1 <- matches_df %>% 
+  dplyr::group_by(team_id) %>% 
+  dplyr::mutate(sum_goals_last3=lag(score_fulltime_team,n=3)+lag(score_fulltime_team,n=2)+lag(score_fulltime_team,n=1)) %>% 
+  dplyr::mutate(sum_goals_last2=lag(score_fulltime_team,n=2)+lag(score_fulltime_team,n=1)) %>%
+  dplyr::left_join(avg_goals_per_league, by=c("league_id"="league_id")) %>% ungroup(team_id)
+
+# test4 <- matches_df_test1 %>% group_by(league_id) %>% mutate(quartile = ntile(sum_goals_last3, 4))
+# test4 <- quantile(!is.na(matches_df_test1$sum_goals_last2))
+# test4 <- matches_df_test1 %>% group_by(league_id) %>% summarise(cnt_games=n(), avg_last_3=mean((score_fulltime_team+score_fulltime_opponent),na.rm = TRUE))
+
+test <- matches_df_test1 %>% 
+  filter(!is.na(sum_goals_last3) & !is.na(score_fulltime_team) & league_level <= 2) %>% 
+  group_by(game_place,sum_goals = sum_goals_last3, score_fulltime_team) %>% 
+  summarise(goals1=n()) 
+
+
+test2 <- matches_df_test1 %>% 
+  filter(!is.na(sum_goals_last3) & !is.na(score_fulltime_team) & league_level <= 2) %>% 
+  group_by(game_place,sum_goals = sum_goals_last3) %>% 
+  summarise(goals2=n()) 
+
+
+
+
+test3 <- left_join(test,test2,by=c("sum_goals"="sum_goals","game_place"="game_place"))
+
+test3 <- test3 %>% mutate(ratio=goals1/goals2)
+
+test3 <- test3 %>% filter(sum_goals <4)
+
+
+
+library(reshape2)
+library(ggplot2)
+
+# longData<-melt(A)
+# longData<-longData[longData$value!=0,]
+
+ggplot(test3, aes(x = sum_goals, y = score_fulltime_opponent)) + 
+  geom_raster(aes(fill=ratio)) + 
+  scale_fill_gradient(low="grey90", high="red") +
+  labs(x="sum_goals_last3", y="score_fulltime_opponent", title="Matrix") +
+  theme_bw() + theme(axis.text.x=element_text(size=9, angle=0, vjust=0.3),
+                     axis.text.y=element_text(size=9),
+                     plot.title=element_text(size=11)) +
+  facet_wrap(~game_place)
+
+
+
+
+test <- matches_df %>% filter(games_order==0 & !is.na(odds) & fixture_status_short %in% c('NS','1H','2H', 'HT','FT') & fixture_date >= '2023-04-01 00:00:00') %>% 
+  select(-coach_id,-coach_name,FT_result,-HT_result,-prev_fixture_date,-games_order_rev,-games_order,-pts,-fixture_status_elapsed,-games_order_per_site,-league_round)
+
+
+
+testH <- test %>% filter(game_place=="H") %>% select(team_idH=team_id,fixture_id,fixture_date,team_name,opponent_name,league_country,league_name,score_fulltime_team,score_fulltime_opponent,league_level,oddsH=odds,res_streakH=res_streak,sum_ptsH=sum_pts)
+testA <- test %>% filter(game_place=="A") %>% select(team_idA=team_id,fixture_id,oddsA=odds,res_streakA=res_streak,sum_ptsA=sum_pts)
+
+rsr3z <- rsr3b %>% filter(h_FT_result=="L") %>% select(h_sum_pts,pts_diff,loss_ratio=ratio)
+
+testF <- left_join(testH,testA,by=c("fixture_id"="fixture_id")) %>% mutate(pts_diff=sum_ptsH-sum_ptsA, FT=paste0(score_fulltime_team,"-",score_fulltime_opponent)) %>% 
+  left_join(rsr3z,by=c("sum_ptsH"="h_sum_pts","pts_diff"="pts_diff")) %>% 
+  mutate(calc_ratio_1x=(as.numeric(1)-loss_ratio),odds_prob_1x=1-(1/oddsA)) %>% mutate(calc_odds_1x=(1/calc_ratio_1x),prob_diff=(calc_ratio_1x-odds_prob_1x)) %>% 
+  select(-team_idA,-team_idH,-score_fulltime_team,-score_fulltime_opponent)
+
+
+bigrquery::bq_auth(path= "/opt/syek/key.json")
+
+billing = "1108793-EMEA-Bee-Fee Limited"
+project = "bi-playground-269209"
+data_set = "soccer_test"
+
+con = dbConnect(
+  bigrquery::bigquery(),
+  project = project,
+  dataset = data_set,
+  billing = billing
+)
+
+dbWriteTable(con, "t_bets", testF, overwrite=TRUE)
+
+
+
+
+
+
+
+matches_df_test1a <- matches_df_test1 %>% dplyr::filter(games_order==0 & league_level <= 2 & sum_goals_last3==0)
+matches_df_test1ax <- matches_df_test1 %>% dplyr::filter(games_order==0 & league_level <= 2 & sum_goals_last3>=6)
+
+###########
+
+#gole stracone
+
+matches_df_test2 <- matches_df %>% 
+  dplyr::group_by(team_id) %>% 
+  dplyr::mutate(sum_goals_last3=lag(score_fulltime_opponent,n=3)+lag(score_fulltime_opponent,n=2)+lag(score_fulltime_opponent,n=1)) %>% 
+  dplyr::mutate(sum_goals_last2=lag(score_fulltime_opponent,n=2)+lag(score_fulltime_opponent,n=1))
+
+test <- matches_df_test2 %>% 
+  filter(!is.na(sum_goals_last3) & !is.na(score_fulltime_opponent) & league_level <= 2) %>% 
+  group_by(game_place, sum_goals=sum_goals_last3, score_fulltime_opponent) %>% 
+  summarise(goals1=n()) 
+
+
+test2 <- matches_df_test2 %>% 
+  filter(!is.na(sum_goals_last3) & !is.na(score_fulltime_opponent) & league_level <= 2) %>% 
+  group_by(game_place, sum_goals=sum_goals_last3) %>% 
+  summarise(goals2=n()) 
+
+
+
+
+test3 <- left_join(test,test2,by=c("sum_goals"="sum_goals","game_place"="game_place"))
+
+test3 <- test3 %>% mutate(ratio=goals1/goals2)
+
+
+
+matches_df_test2a <- matches_df_test2 %>% dplyr::filter(games_order==0 & league_level <= 2 & sum_goals_last3==0)
+matches_df_test2ax <- matches_df_test2 %>% dplyr::filter(games_order==0 & league_level <= 2 & sum_goals_last3>=6)
+
+##########
+
+matches_df_test1b <- matches_df_test1ax %>% dplyr::filter(league_level <= 2) %>% dplyr::select(fixture_date, league_country, league_name, fixture_id,team_id,team_name,opponent_id,opponent_name,game_place)
+matches_df_test2b <- matches_df_test2ax %>% dplyr::select(fixture_id,team_id,team_name,opponent_id,opponent_name)
+
+
+matches_df_test3 <- dplyr::left_join(matches_df_test1b,matches_df_test2b,by=c("opponent_id"="team_id"))
+
+
+
+##########
+
+
+test <- matches_df %>% 
+  filter(!is.na(prev_game_scored_g) & !is.na(score_fulltime_team) & league_level <= 2) %>% 
+  group_by(prev_game_scored_g, score_fulltime_team) %>% 
+  summarise(goals1=n()) 
+
+
+test2 <- matches_df %>% 
+  filter(!is.na(prev_game_scored_g) & !is.na(score_fulltime_team) & league_level <= 2) %>% 
+  group_by(prev_game_scored_g) %>% 
+  summarise(goals2=n()) 
+
+
+
+
+test3 <- left_join(test,test2,by=c("prev_game_scored_g"="prev_game_scored_g"))
+
+test3 <- test3 %>% mutate(ratio=goals1/goals2)
+
+###########
+
+test <- matches_df %>% 
+  filter(!is.na(prev_game_lost_g) & !is.na(score_fulltime_opponent) & league_level <= 2) %>% 
+  group_by(prev_game_lost_g, score_fulltime_opponent) %>% 
+  summarise(goals1=n()) 
+
+
+test2 <- matches_df %>% 
+  filter(!is.na(prev_game_lost_g) & !is.na(score_fulltime_opponent) & league_level <= 2) %>% 
+  group_by(prev_game_lost_g) %>% 
+  summarise(goals2=n()) 
+
+
+
+
+test3 <- left_join(test,test2,by=c("prev_game_lost_g"="prev_game_lost_g"))
+
+test3 <- test3 %>% mutate(ratio=goals1/goals2)
+
+##################
+
+test1 <- matches_df %>% 
+  group_by(team_id) %>%
+  mutate(res_streak=paste0(lag(FT_result,n=1),lag(FT_result,n=2),lag(FT_result,n=3))) %>% 
+  filter(games_order_rev!=0 & games_order_rev !=1 & games_order_rev !=2)
+
+winners1 <- test1 %>% 
+  group_by(game_place,FT_result,res_streak) %>% 
+  dplyr::summarise(res1=n())
+
+winners2 <- test1 %>% 
+  group_by(game_place,res_streak) %>% 
+  dplyr::summarise(res2=n())
+
+winners3 <- left_join(winners1,winners2,by=c("game_place"="game_place","res_streak"="res_streak")) %>% mutate(res_ratio=res1/res2)
