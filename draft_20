@@ -1,0 +1,80 @@
+#statystyki
+
+avg_goals_per_league <- rsr_df %>% 
+  group_by(league_id) %>% 
+  summarise(avg_scored = mean(score_fulltime_team, na.rm = TRUE), 
+            avg_lost = mean(score_fulltime_opponent, na.rm = TRUE),
+            sum_scored = sum(score_fulltime_team, na.rm = TRUE), 
+            sum_lost = sum(score_fulltime_opponent, na.rm = TRUE),
+            med_scored = median(score_fulltime_team, na.rm = TRUE), 
+            med_lost = median(score_fulltime_opponent, na.rm = TRUE),
+            max_scored = max(score_fulltime_team, na.rm = TRUE), 
+            max_lost = max(score_fulltime_opponent, na.rm = TRUE),
+            gamest_cnt = n())
+
+#gole strzelone
+
+rsr_scored <- rsr_df %>% 
+  group_by(team_id) %>% 
+  mutate(sum_goals_last3=lag(score_fulltime_team,n=3)+lag(score_fulltime_team,n=2)+lag(score_fulltime_team,n=1)) %>% 
+  mutate(sum_goals_last2=lag(score_fulltime_team,n=2)+lag(score_fulltime_team,n=1)) %>%
+  ungroup(team_id) %>% 
+  left_join(avg_goals_per_league, by=c("league_id"="league_id"))
+
+
+tot_goals_per_game_last3_scored <- rsr_scored %>% 
+  filter(!is.na(sum_goals_last3) & !is.na(FT_result) & league_level <= 2) %>% 
+  group_by(game_place,sum_goals_last3, FT_result) %>% 
+  summarise(goals_per_game_last3=n()) 
+
+
+tot_goals_last3_scored <- rsr_scored %>% 
+  filter(!is.na(sum_goals_last3) & !is.na(FT_result) & league_level <= 2) %>% 
+  group_by(game_place,sum_goals = sum_goals_last3) %>% 
+  summarise(tot_goals_last3=n()) 
+
+
+
+
+scored_ratio <- left_join(tot_goals_per_game_last3_scored,tot_goals_last3_scored,by=c("sum_goals_last3"="sum_goals","game_place"="game_place"))
+
+scored_ratio <- scored_ratio %>% mutate(ratio=goals_per_game_last3/tot_goals_last3)
+
+
+#gole stracone
+
+rsr_scored <- rsr_scored %>% 
+  group_by(team_id) %>% 
+  mutate(sum_goals_last3_lost=lag(score_fulltime_opponent,n=3)+lag(score_fulltime_opponent,n=2)+lag(score_fulltime_opponent,n=1)) %>% 
+  mutate(sum_goals_last2_lost=lag(score_fulltime_opponent,n=2)+lag(score_fulltime_opponent,n=1))
+
+
+
+#wygrane mecze
+
+rsr_scored <- rsr_scored %>% 
+  group_by(team_id) %>% 
+  mutate(sum_goals_last3=lag(FT_result,n=3)+lag(FT_result,n=2)+lag(FT_result,n=1)) %>% 
+  mutate(sum_goals_last2=lag(score_fulltime_team,n=2)+lag(score_fulltime_team,n=1)) %>%
+  ungroup(team_id) %>% 
+  left_join(avg_goals_per_league, by=c("league_id"="league_id"))
+
+
+rsr_scored <- rsr_scored %>% 
+  group_by(team_id) %>%
+  mutate(res_streak=paste0(lag(FT_result,n=1),lag(FT_result,n=2),lag(FT_result,n=3))) %>% 
+  filter(games_order_rev!=0 & games_order_rev !=1 & games_order_rev !=2)
+
+
+test <- rsr_scored %>% filter(sum_goals_last3_lost==0 & league_level <= 2)
+
+
+winners1 <- test %>% 
+  group_by(game_place,FT_result,res_streak) %>% 
+  summarise(res1=n())
+
+winners2 <- test %>% 
+  group_by(game_place,res_streak) %>% 
+  summarise(res2=n())
+
+winners3 <- left_join(winners1,winners2,by=c("game_place"="game_place","res_streak"="res_streak")) %>% mutate(res_ratio=res1/res2)
