@@ -1,0 +1,33 @@
+projectid <- "bi-playground-269209"
+
+bq_auth(path= "/opt/syek/key.json")
+
+fixtureIds <- results_df %>% mutate(fix_id=paste0(fixture_id,", "))
+
+fx <- paste(fixtureIds$fix_id, collapse = '')
+
+sql <- (paste0("select * from `bi-playground-269209.soccer_test.events_daily` where fixture_id in (",fx,"0)"))
+
+test_df <- bq_table_download(bq_project_query(projectid,sql))
+
+test_df <- test_df %>% filter(type=="Goal") %>% arrange(fixture_id,time_elapsed,time_extra) 
+test_df <- test_df %>% group_by(fixture_id) %>%  dplyr::mutate(nrow= dplyr::row_number(), prev_goal=lag(time_elapsed)) %>% 
+  filter(nrow==2) %>% mutate(time_diff=(time_elapsed-prev_goal))
+
+ggplot(test_df , aes(x=prev_goal)) + geom_histogram(binwidth=1,color="darkblue", fill="lightblue") + labs(x = "time difference",y = "2nd goals count")
+
+
+
+ggplot(matches_df , aes(x=sum_pts)) + geom_histogram(binwidth=1,color="darkblue", fill="lightblue")
+
+
+
+
+projectid <- "bi-playground-269209"
+
+bq_auth(path= "/opt/syek/key.json")
+
+sql <- ("select * from `bi-playground-269209.soccer_test.odds_table` ")
+
+odds <- bq_table_download(bq_project_query(projectid,sql))
+
